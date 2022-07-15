@@ -95,6 +95,11 @@ elif [[ $(uname) == 'Linux' ]]; then
   make_dir $OUT_DIR/linux
   cp -r $SOURCE_DIR/out/linux/lib/*.a $OUT_DIR/linux
 
+  # build web
+  ../../scripts/build_ffmpeg_web.sh
+  make_dir $OUT_DIR/web/wasm
+  cp -r $SOURCE_DIR/out/web/wasm/lib/*.a $OUT_DIR/web/wasm
+
 elif [[ $(uname) == *MINGW64* ]]; then
   # build win64
   win_build x64
