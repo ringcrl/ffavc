@@ -27,37 +27,57 @@ export class FFAVCDecoder {
 
   private wasmIns: any;
   private pag: any;
+  private module?: FFAVC;
   private height = 0;
   private buffer: YUVBuffer = { data: [], lineSize: [] };
 
-  public constructor(wasmIns: any, pag: any) {
+  private requireModule(): FFAVC {
+    const module = this.module || FFAVCDecoder.module;
+    if (!module || !module.HEAP8 || !module.HEAP8.buffer) {
+      throw new Error('FFAVC module not initialized. Call FFAVCInit() and wait for it to resolve.');
+    }
+    return module;
+  }
+
+  public constructor(wasmIns: any, pag: any, module?: FFAVC) {
     this.wasmIns = wasmIns;
     this.pag = pag;
+    if (module) {
+      this.module = module;
+      if (!FFAVCDecoder.module) {
+        FFAVCDecoder.module = module;
+      }
+    }
   }
 
   public onConfigure(headers: Uint8Array[], mimeType: string, width: number, height: number): boolean {
     this.height = height;
+    const module = this.requireModule();
     const dataOnHeaps = headers.map((header) => {
+      if (!header) {
+        throw new Error('FFAVCDecoder.onConfigure requires non-empty headers.');
+      }
       const length = header.byteLength * header.BYTES_PER_ELEMENT;
-      const dataPtr = FFAVCDecoder.module._malloc(length);
-      const dataOnFFAVC = new Uint8Array(FFAVCDecoder.module.HEAP8.buffer, dataPtr, length);
+      const dataPtr = module._malloc(length);
+      const dataOnFFAVC = new Uint8Array(module.HEAP8.buffer, dataPtr, length);
       dataOnFFAVC.set(header);
       return dataOnFFAVC;
     });
     const res = this.wasmIns._onConfigure(dataOnHeaps, mimeType, width, height) as boolean;
     dataOnHeaps.forEach((data) => {
-      FFAVCDecoder.module._free(data.byteOffset);
+      module._free(data.byteOffset);
     });
     return res;
   }
 
   public onSendBytes(bytes: Uint8Array, timestamp: number): DecoderResult {
+    const module = this.requireModule();
     const length = bytes.byteLength * bytes.BYTES_PER_ELEMENT;
-    const dataPtr = FFAVCDecoder.module._malloc(length);
-    const dataOnFFAVC = new Uint8Array(FFAVCDecoder.module.HEAP8.buffer, dataPtr, length);
+    const dataPtr = module._malloc(length);
+    const dataOnFFAVC = new Uint8Array(module.HEAP8.buffer, dataPtr, length);
     dataOnFFAVC.set(bytes);
     const res = this.wasmIns._onSendBytes(dataOnFFAVC, timestamp).value;
-    FFAVCDecoder.module._free(dataPtr);
+    module._free(dataPtr);
     return res;
   }
 
@@ -74,6 +94,10 @@ export class FFAVCDecoder {
   }
 
   public onRenderFrame(): YUVBuffer | null {
+    this.requireModule();
+    if (!this.pag || !this.pag.HEAP8 || !this.pag.HEAP8.buffer) {
+      throw new Error('PAG module not initialized before calling FFAVCDecoder.onRenderFrame().');
+    }
     // Free last frame.
     if (this.buffer.data.length > 0) {
       this.buffer.data.forEach((data) => {

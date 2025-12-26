@@ -8,7 +8,14 @@ export class FFAVCDecoderFactory {
 
   public createSoftwareDecoder(pag: EmscriptenModule): FFAVCDecoder | null {
     if (!pag) return null;
-    const wasmIns = new FFAVCDecoderFactory.module._FFAVCDecoder();
-    return new FFAVCDecoder(wasmIns, pag);
+    const module = FFAVCDecoderFactory.module;
+    if (!module) {
+      throw new Error('FFAVC module not initialized. Call FFAVCInit() and wait for it to resolve.');
+    }
+    if (!FFAVCDecoder.module) {
+      FFAVCDecoder.module = module;
+    }
+    const wasmIns = new module._FFAVCDecoder();
+    return new FFAVCDecoder(wasmIns, pag, module);
   }
 }

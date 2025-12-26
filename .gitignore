@@ -54,3 +54,5 @@ Podfile.lock
 .cxx
 /vendor/ffmpeg/
 /out
+build-node
+lib-node
